@@ -1,5 +1,5 @@
 import trig
-from ..trig import VECTOR_TWO, Location, SlideGenerator
+from trig import VECTOR_TWO, Location, SlideGenerator
 import math
 
 
