@@ -1,0 +1,89 @@
+{
+    "finishTiming": 0.972973,
+    "noteCollections": [
+        {
+            "eachStyle": 0,
+            "notes": [
+                {
+                    "appearance": 0,
+                    "length": null,
+                    "location": {
+                        "index": 0,
+                        "group": 0
+                    },
+                    "slideMorph": 0,
+                    "slidePaths": [],
+                    "styles": 0,
+                    "type": 4
+                }
+            ],
+            "time": 0
+        },
+        {
+            "eachStyle": 0,
+            "notes": [
+                {
+                    "appearance": 0,
+                    "length": 0.3243243,
+                    "location": {
+                        "index": 1,
+                        "group": 0
+                    },
+                    "slideMorph": 0,
+                    "slidePaths": [],
+                    "styles": 0,
+                    "type": 4
+                }
+            ],
+            "time": 0.3243243
+        },
+        {
+            "eachStyle": 0,
+            "notes": [
+                {
+                    "appearance": 0,
+                    "length": null,
+                    "location": {
+                        "index": 3,
+                        "group": 0
+                    },
+                    "slideMorph": 0,
+                    "slidePaths": [
+                        {
+                            "startLocation": {
+                                "index": 0,
+                                "group": 0
+                            },
+                            "segments": [
+                                {
+                                    "vertices": [
+                                        {
+                                            "index": 6,
+                                            "group": 0
+                                        }
+                                    ],
+                                    "slideType": 0
+                                }
+                            ],
+                            "delay": 0.3243243,
+                            "duration": 0.6486486,
+                            "type": 3
+                        }
+                    ],
+                    "styles": 0,
+                    "type": 0
+                }
+            ],
+            "time": 0.8108108
+        }
+    ],
+    "timingChanges": [
+        {
+            "SecondsPerBar": 0.3243243,
+            "SecondsPerBeat": 0.16216215,
+            "time": 0,
+            "tempo": 185,
+            "subdivisions": 8
+        }
+    ]
+}
