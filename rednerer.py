@@ -6,7 +6,7 @@ from tqdm import tqdm
 import pyglet
 from pyglet import gl
 
-# pyglet.options['headless'] = True
+pyglet.options['headless'] = True
 from slidegen import get_generator
 from simaisharpwrapper.wrapper import SimaisharpWrapper
 from simaisharpwrapper.chart import Chart
@@ -283,7 +283,7 @@ def _draw_slide_triangle(memory, batch, pos: tuple[float, float], rot: float, co
         )
     )
 def render(time, chart: Chart, overrides=None):
-    # window = pyglet.window.Window(RES, RES)
+    window = pyglet.window.Window(RES, RES)
     if overrides is None:
         overrides = {}
     settings = const_settings.copy()
@@ -560,11 +560,11 @@ def main(chtxt, overrides=None):
     return "output.mp4"
 
 TX = "1,1,1,1,2,2,2,2,,,,,3,3,3,3"
-main(TX, overrides={"note_speed": 5})
-exit()
+# main(TX, overrides={"note_speed": 5})
+# exit()
 
 import asyncio
-import discord 
+import discord, json
 import os # default module
 from dotenv import load_dotenv # type: ignore
 from dataclasses import dataclass
@@ -578,7 +578,7 @@ bot = discord.Bot()
 @dataclass
 class RenderJob:
     job_id: int
-    simai_data: str
+    simai_data: tuple[str, dict] # (simai string, cparams dict)
     future: asyncio.Future
 
 
@@ -609,7 +609,7 @@ async def render_worker() -> None:
             active_job_id = job.job_id
             if queued_job_ids and queued_job_ids[0] == job.job_id:
                 queued_job_ids.popleft()
-            result = await asyncio.to_thread(main, job.simai_data)
+            result = await asyncio.to_thread(main, job.simai_data[0], overrides=job.simai_data[1])
             if not job.future.done():
                 job.future.set_result(result)
         except Exception as exc:
@@ -627,8 +627,15 @@ async def on_ready():
         render_worker_task = asyncio.create_task(render_worker())
     print(f"{bot.user} ready")
 
-@bot.slash_command(name="simai_render", description="pass raw simai, e.g. `7h[4:1]/1h[4:1],5,5,5,5,` defaults to 120 bpm and 4 subdiv")
-async def simai_render(ctx: discord.ApplicationContext, simai_data: str):
+@bot.slash_command(name="simai_render", description="pass raw simai, e.g. `7h[4:1]/1h[4:1],5,5,5,5,` defaults to 120 bpm and 4 subdiv, use cparams for custom params")
+async def simai_render(ctx: discord.ApplicationContext, simai_data: str, cparams: str = None):
+    if cparams is None:
+        cparams = r"{}"
+    try:
+        ovrds = json.loads(cparams)
+    except json.JSONDecodeError:
+        ovrds = False
+    ovrd_msg = f"(with {len(ovrds)} custom parameters)" if ovrds else "(cparams failed)"
     job_id = next(job_id_counter)
     queued_job_ids.append(job_id)
     queue_position, _ = get_job_position(job_id)
@@ -641,7 +648,7 @@ async def simai_render(ctx: discord.ApplicationContext, simai_data: str):
     await ctx.respond(embed=temp_embed)
     original_message = await ctx.interaction.original_response()
     future: asyncio.Future = asyncio.get_running_loop().create_future()
-    await render_queue.put(RenderJob(job_id=job_id, simai_data=simai_data, future=future))
+    await render_queue.put(RenderJob(job_id=job_id, simai_data=(simai_data, ovrds), future=future))
     try:
         last_position = queue_position
         last_rendering_state = False
@@ -658,7 +665,7 @@ async def simai_render(ctx: discord.ApplicationContext, simai_data: str):
                         await original_message.edit(
                             embed=discord.Embed(
                                 title="rendering now",
-                                description="rendering now",
+                                description=f"rendering now {ovrd_msg}",
                                 image="https://files.catbox.moe/6o59ey.gif",
                                 color=0xDA70D6,
                             )
@@ -667,7 +674,7 @@ async def simai_render(ctx: discord.ApplicationContext, simai_data: str):
                         await original_message.edit(
                             embed=discord.Embed(
                                 title="render queue",
-                                description=f"maimai queue, position #{position}",
+                                description=f"maimai queue, position #{position} {ovrd_msg}",
                                 image="https://files.catbox.moe/6o59ey.gif",
                                 color=0xDA70D6,
                             )
