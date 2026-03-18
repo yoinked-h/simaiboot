@@ -2,11 +2,11 @@ import bisect
 import json
 import math
 from pathlib import Path
-
+from tqdm import tqdm
 import pyglet
 from pyglet import gl
 
-# pyglet.options['headless'] = True
+pyglet.options['headless'] = True
 from slidegen import get_generator
 from simaisharpwrapper.wrapper import SimaisharpWrapper
 from simaisharpwrapper.chart import Chart
@@ -17,7 +17,7 @@ def HEXTOTUPLE(h) -> tuple[int, int, int]:
     return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))  # type: ignore
 
 
-gl.glClearColor(0, 0, 0, 1)
+#gl.glClearColor(0, 0, 0, 1)
 RES = 350
 HRES = RES // 2
 HEIGHT, WIDTH = RES, RES
@@ -27,7 +27,7 @@ COLORS = {
     "slide": HEXTOTUPLE("06CDFB"),
     "touch": HEXTOTUPLE("5CDCF8"),
     "break": HEXTOTUPLE("E16005"),
-    "holdline": HEXTOTUPLE("73FC66")
+    "holdline": HEXTOTUPLE("73FC66"),
 }
 
 wrapper = SimaisharpWrapper()
@@ -48,12 +48,12 @@ def fix(malformatted):
 
 JSONDAT = fix(malformat)
 
-window = pyglet.window.Window(RES, RES)
+#window = pyglet.window.Window(RES, RES)
 
 NOTE_SPEED = 1.5
 TOUCH_BASE_SEPARATION = 15
 TOUCH_HOLD_ARC_STEPS = 32
-SLIDE_STEP_SIZE = 0.05
+SLIDE_STEP_DISTANCE = 20.0
 TIME_FROM_SPAWN_TO_RING = 1 / NOTE_SPEED # ms
 GROW_PERCENTAGE = 0.5
 PLAY_AREA_RADIUS = 150
@@ -62,7 +62,8 @@ CIRCLE_RADIUS = 12
 CIRCLE_THICKNESS = 3
 HOLD_LINE_WIDTH = 5
 SLIDE_ARROW_LEN = 12
-SLIDE_ARROW_THICK = 6
+SLIDE_ARROW_THICK = 10
+TOUCHSLIDE_ANGLE_SEP = math.radians(36)
 CENTER = (HRES, HRES)
 # CENTER = (0,0)
 # PLAY_AREA_RADIUS = 1
@@ -81,6 +82,26 @@ def get_touch_note_loc(note):
 
 GOAL_POSITIONS = GOAL_POSITIONS[::-1]
 GOAL_POSITIONS = GOAL_POSITIONS[6:] + GOAL_POSITIONS[:6]
+    
+
+def draw_sensors(memory, batch):
+    for _, v in JSONDAT.items():
+        verts = v['coordinates']
+        for i in range(len(verts)):
+            x1, y1 = verts[i] #0-1
+            x2, y2 = verts[(i+1)%len(verts)]
+            x1 = x1 * PLAY_AREA_RADIUS * 2 + (RES - PLAY_AREA_RADIUS*2)/2
+            y1 = (1-y1) * PLAY_AREA_RADIUS * 2 + (RES - PLAY_AREA_RADIUS*2)/2
+            x2 = x2 * PLAY_AREA_RADIUS * 2 + (RES - PLAY_AREA_RADIUS*2)/2
+            y2 = (1-y2) * PLAY_AREA_RADIUS * 2 + (RES - PLAY_AREA_RADIUS*2)/2
+            memory.append(
+                pyglet.shapes.Line(
+                    x1, y1, x2, y2,
+                    color=(255,255,255,75),
+                    thickness=1,
+                    batch=batch,
+                )
+            )
 
 
 def get_note_visual_state(time: float, hit_time: float, goal_pos: tuple[float, float], visible_until: float, keep_at_center_before_spawn: bool = False):
@@ -207,6 +228,12 @@ def _sample_slide_path(segment_data, total_length: float, t: float):
     return _sample_generators(segment_data[-1][0], 1.0)
 
 
+def _get_slide_step_size(total_length: float) -> float:
+    if total_length <= 0:
+        return 1.0
+    return min(1.0, SLIDE_STEP_DISTANCE / total_length)
+
+
 def _draw_slide_triangle(memory, batch, pos: tuple[float, float], rot: float, color="slide", alpha=1.0):
     tip = trig.vec_add(pos, trig.vec_mul((math.cos(rot), math.sin(rot)), SLIDE_ARROW_LEN))
     left = trig.vec_add(pos, trig.vec_mul((math.cos(rot + math.pi * 0.75), math.sin(rot + math.pi * 0.75)), SLIDE_ARROW_THICK))
@@ -223,8 +250,10 @@ def _draw_slide_triangle(memory, batch, pos: tuple[float, float], rot: float, co
             batch=batch,
         )
     )
+def render(time, chart: Chart):
+    window = pyglet.window.Window(RES, RES)
+    
 
-def render(time, chart: Chart, window=window):
     window.switch_to()
     window.clear()
     batch = pyglet.graphics.Batch()
@@ -232,6 +261,7 @@ def render(time, chart: Chart, window=window):
     memory.append(pyglet.shapes.Rectangle(0, 0, RES, RES, color=(0, 0, 0, 255), batch=batch))
     chart_list = sorted(chart, key=lambda ns: ns.time)
     chart_times = [ns.time for ns in chart_list]
+    draw_sensors(memory, batch)
     for g_pos in GOAL_POSITIONS:
         memory.append(pyglet.shapes.Circle(g_pos[0], g_pos[1], 5, color=(255, 255, 255, 255), batch=batch))
     end_idx = bisect.bisect_right(chart_times, time + TIME_FROM_SPAWN_TO_RING)
@@ -246,7 +276,8 @@ def render(time, chart: Chart, window=window):
 
             g_pos = GOAL_POSITIONS[note.location.index]
             color = get_note_color(note, noteset)
-            if note.type == 1 or (note.type == 2 and note.location.group != 0): #touch
+            DO_TOUCH_SLIDE_EXCEPTION = False
+            if (note.type == 1 or ((note.type == 2 or note.type == 3) and note.location.group != 0)) and (time <= (noteset.time + note.length)): #touch
                 tloc = get_touch_note_loc(note)
                 time_to_goal = noteset.time - time
                 tpercent = 1-(time_to_goal / TIME_FROM_SPAWN_TO_RING)
@@ -259,7 +290,7 @@ def render(time, chart: Chart, window=window):
                     hold_progress = max(0, min(1, (time - noteset.time) / hold_duration)) if hold_duration > 0 else 0
                     
                     circle_radius = TOUCH_HOLD_RADIUS
-                    memory.append(pyglet.shapes.Circle(tloc[0], tloc[1], circle_radius, color=(50, 50, 50), batch=batch))
+                    memory.append(pyglet.shapes.Circle(tloc[0], tloc[1], circle_radius, color=(255,255,255, 51), batch=batch))
                     
                     # Draw fill circle clockwise (starting from top, -90 degrees)
                     if hold_progress > 0:
@@ -282,61 +313,108 @@ def render(time, chart: Chart, window=window):
                                     batch=batch,
                                 )
                             )
-                
-                for edge_idx in range(4):
-                    if note.length > 0:
-                        color = hue_rotate((255, 128, 128), edge_idx * 90) #type: ignore
-                    angle = (edge_idx / 4) * math.pi * 2 # up, right, down, left
-                    offset = (math.cos(angle) * TOUCH_BASE_SEPARATION, math.sin(angle) * TOUCH_BASE_SEPARATION)
-
-                    # Interpolate tip from spawn position to tloc based on percent
-                    tip = trig.vec_lerp(trig.vec_add(tloc, offset), tloc, percent)
                     
-                    # Base vertices perpendicular to offset direction
-                    perp_angle = angle + math.pi / 2
-                    perp_offset = (math.cos(perp_angle) * TOUCH_BASE_SEPARATION, math.sin(perp_angle) * TOUCH_BASE_SEPARATION)
-                    left_base = trig.vec_add(tip, trig.vec_add(offset, perp_offset))
-                    right_base = trig.vec_add(tip, trig.vec_sub(offset, perp_offset))
-                    if percent == 0:
-                        color= set_alpha_color(color, tpercent*2) #type: ignore
-                    # Draw triangle lines
-                    memory.append(
-                        pyglet.shapes.Line(
-                            tip[0],
-                            tip[1],
-                            left_base[0],
-                            left_base[1],
-                            color=color,
-                            thickness=2,
-                            batch=batch,
+                if len(note.slide_path) == 0:
+                    for edge_idx in range(4):
+                        if note.length > 0:
+                            color = hue_rotate((255, 128, 128), edge_idx * 90) #type: ignore
+                        angle = (edge_idx / 4) * math.pi * 2 # up, right, down, left
+                        offset = (math.cos(angle) * TOUCH_BASE_SEPARATION, math.sin(angle) * TOUCH_BASE_SEPARATION)
+                        # Interpolate tip from spawn position to tloc based on percent
+                        tip = trig.vec_lerp(trig.vec_add(tloc, offset), tloc, percent)
+                        # Base vertices perpendicular to offset direction
+                        perp_angle = angle + math.pi / 2
+                        perp_offset = (math.cos(perp_angle) * TOUCH_BASE_SEPARATION, math.sin(perp_angle) * TOUCH_BASE_SEPARATION)
+                        left_base = trig.vec_add(tip, trig.vec_add(offset, perp_offset))
+                        right_base = trig.vec_add(tip, trig.vec_sub(offset, perp_offset))
+                        if percent == 0:
+                            color= set_alpha_color(color, tpercent*2) #type: ignore
+                        # Draw triangle lines
+                        memory.append(
+                            pyglet.shapes.Line(
+                                tip[0],
+                                tip[1],
+                                left_base[0],
+                                left_base[1],
+                                color=color,
+                                thickness=2,
+                                batch=batch,
+                            )
                         )
-                    )
-                    memory.append(
-                        pyglet.shapes.Line(
-                            tip[0],
-                            tip[1],
-                            right_base[0],
-                            right_base[1],
-                            color=color,
-                            thickness=2,
-                            batch=batch,
+                        memory.append(
+                            pyglet.shapes.Line(
+                                tip[0],
+                                tip[1],
+                                right_base[0],
+                                right_base[1],
+                                color=color,
+                                thickness=2,
+                                batch=batch,
+                            )
                         )
-                    )
+                        memory.append(
+                            pyglet.shapes.Line(
+                                left_base[0],
+                                left_base[1],
+                                right_base[0],
+                                right_base[1],
+                                color=color,
+                                thickness=2,
+                                batch=batch,
+                            )
+                        )
+                    continue 
+                else:
+                    # print("slide touch", note.slide_path)
+                    DO_TOUCH_SLIDE_EXCEPTION = True
+                    for edge_idx in range(5): # pentagon
+                        angle = (edge_idx / 5) * math.pi * 2
+                        offset = (math.cos(angle) * TOUCH_BASE_SEPARATION, math.sin(angle) * TOUCH_BASE_SEPARATION)
+                        tip = trig.vec_lerp(trig.vec_add(tloc, offset), tloc, percent)
+                        perp_angle = angle + math.pi / 2
+                        perp_offset = (math.cos(perp_angle) * TOUCH_BASE_SEPARATION, math.sin(perp_angle) * TOUCH_BASE_SEPARATION)
+                        # angled away by TOUCHSLIDE_ANGLE_SEP
+                        left_base = trig.vec_add(tip, trig.vec_add(trig.vec_mul(offset, math.cos(TOUCHSLIDE_ANGLE_SEP)) , trig.vec_mul(perp_offset, math.sin(TOUCHSLIDE_ANGLE_SEP))))
+                        right_base = trig.vec_add(tip, trig.vec_sub(trig.vec_mul(offset, math.cos(TOUCHSLIDE_ANGLE_SEP)) , trig.vec_mul(perp_offset, math.sin(TOUCHSLIDE_ANGLE_SEP))))
+                        if percent == 0:
+                            color= set_alpha_color(color, tpercent*2) #type: ignore
+                        memory.append(
+                            pyglet.shapes.Line(
+                                tip[0],
+                                tip[1],
+                                left_base[0],
+                                left_base[1],
+                                color=color,
+                                thickness=2,
+                                batch=batch,
+                            )
+                        )
+                        memory.append(
+                            pyglet.shapes.Line(
+                                tip[0],
+                                tip[1],
+                                right_base[0],
+                                right_base[1],
+                                color=color,
+                                thickness=2,
+                                batch=batch,
+                            )
+                        )
+                        memory.append(
+                            pyglet.shapes.Line(
+                                left_base[0],
+                                left_base[1],
+                                right_base[0],
+                                right_base[1],
+                                color=color,
+                                thickness=2,
+                                batch=batch,
+                            )
+                        )
+        
                     
-                    memory.append(
-                        pyglet.shapes.Line(
-                            left_base[0],
-                            left_base[1],
-                            right_base[0],
-                            right_base[1],
-                            color=color,
-                            thickness=2,
-                            batch=batch,
-                        )
-                    )
-                continue
                 
-            if note.type == 2 and note.location.group == 0: #hold
+            if note.type == 2 and note.location.group == 0 and not DO_TOUCH_SLIDE_EXCEPTION: #hold
                 start_state = get_note_visual_state(time, noteset.time, g_pos, hold_end_time)
                 end_state = get_note_visual_state(time, hold_end_time, g_pos, hold_end_time, keep_at_center_before_spawn=True)
                 if start_state is None or end_state is None:
@@ -361,7 +439,7 @@ def render(time, chart: Chart, window=window):
                 continue
             if note.type == 3 or len(note.slide_path) > 0: #slide
                 note_state = get_note_visual_state(time, noteset.time, g_pos, hold_end_time)
-                if note_state is not None and time < noteset.time:
+                if note_state is not None and time < noteset.time and not DO_TOUCH_SLIDE_EXCEPTION:
                     pos, radius = note_state
                     memory.append(pyglet.shapes.Circle(pos[0], pos[1], radius, color=color, batch=batch))
 
@@ -380,7 +458,8 @@ def render(time, chart: Chart, window=window):
                     else:
                         passed_t = _clamp01((elapsed_since_hit - slide_path.delay) / slide_path.duration)
                     percentage_of_way_to_ring = min(((1+ elapsed_since_hit)/2) / TIME_FROM_SPAWN_TO_RING, 1.0)
-                    arrow_t = max(0.0, SLIDE_STEP_SIZE)
+                    step_size = _get_slide_step_size(total_length)
+                    arrow_t = max(0.0, step_size)
                     while arrow_t <= 1.0 + 1e-6:
                         if arrow_t > passed_t + 1e-6:
                             sample = _sample_slide_path(segment_data, total_length, min(arrow_t, 1.0))
@@ -393,7 +472,7 @@ def render(time, chart: Chart, window=window):
                                 for sample_pos, sample_rot in sample:
                                     world_pos = trig.vec_add(sample_pos, CENTER)
                                     _draw_slide_triangle(memory, batch, world_pos, sample_rot, color=cname, alpha=percentage_of_way_to_ring)
-                        arrow_t += SLIDE_STEP_SIZE
+                        arrow_t += step_size
 
                     if elapsed_since_hit >= 0:
                         sample = _sample_slide_path(segment_data, total_length, passed_t)
@@ -423,15 +502,153 @@ def render(time, chart: Chart, window=window):
     return pyglet.image.get_buffer_manager().get_color_buffer().get_image_data()
 
 
-if __name__ == "__main__":
+
+
+FPS = 30
+
+def main(chtxt):
+    data = r"&inote_6=(120){4},," + chtxt + ",(120){4},,E"
+    test_chart = wrapper.deserialize(data, chart_key=6, convert_to_obj=True)
+
+    if not isinstance(test_chart, Chart):
+        raise Exception("failed to deserialize chart")
     endtime = test_chart.finish_timing
     imgs = []
-    for i in range(0, int(endtime * 60)):
-        imgs.append(render(i/60, test_chart))
+    for i in tqdm(range(0, int(endtime * FPS))):
+        imgs.append(render(i/FPS, test_chart))
     import numpy as np
     def np_ify(img):
-        # np.frombuffer(img.get_data(), dtype=np.uint8).reshape(img.height, img.width, 4) is flipped vertically, so we need to flip it back
         return np.flipud(np.frombuffer(img.get_data(), dtype=np.uint8).reshape(img.height, img.width, 4))
     import imageio
     npimgs = [np_ify(img) for img in imgs]
-    imageio.mimwrite('output.mp4', npimgs, fps=60) # type: ignore
+    imageio.mimwrite('output.mp4', npimgs, fps=FPS) # type: ignore
+    return "output.mp4"
+
+TX = "E8-E6-E7-E3-E4-E2[4:1],,,,E8-E2-E1-E5-E6-E4[4:1],,,,E6^E4[4:1]/E2/E8,E2/E8,E2/E8,E2/E8,,"
+#main(TX)
+#exit()
+
+import asyncio
+import discord 
+import os # default module
+from dotenv import load_dotenv # type: ignore
+from dataclasses import dataclass
+from collections import deque
+from itertools import count
+
+load_dotenv() # load all the variables from the env file
+bot = discord.Bot()
+
+
+@dataclass
+class RenderJob:
+    job_id: int
+    simai_data: str
+    future: asyncio.Future
+
+
+render_queue: asyncio.Queue[RenderJob] = asyncio.Queue()
+render_worker_task: asyncio.Task | None = None
+queued_job_ids: deque[int] = deque()
+active_job_id: int | None = None
+job_id_counter = count(1)
+
+
+def get_job_position(job_id: int) -> tuple[int | None, bool]:
+    if active_job_id == job_id:
+        return 1, True
+
+    for idx, queued_id in enumerate(queued_job_ids):
+        if queued_id == job_id:
+            base = 2 if active_job_id is not None else 1
+            return base + idx, False
+
+    return None, False
+
+
+async def render_worker() -> None:
+    global active_job_id
+    while True:
+        job = await render_queue.get()
+        try:
+            active_job_id = job.job_id
+            if queued_job_ids and queued_job_ids[0] == job.job_id:
+                queued_job_ids.popleft()
+            result = await asyncio.to_thread(main, job.simai_data)
+            if not job.future.done():
+                job.future.set_result(result)
+        except Exception as exc:
+            if not job.future.done():
+                job.future.set_exception(exc)
+        finally:
+            if active_job_id == job.job_id:
+                active_job_id = None
+            render_queue.task_done()
+
+@bot.event
+async def on_ready():
+    global render_worker_task
+    if render_worker_task is None or render_worker_task.done():
+        render_worker_task = asyncio.create_task(render_worker())
+    print(f"{bot.user} ready")
+
+@bot.slash_command(name="simai_render", description="pass raw simai, e.g. `7h[4:1]/1h[4:1],5,5,5,5,` defaults to 120 bpm and 4 subdiv")
+async def simai_render(ctx: discord.ApplicationContext, simai_data: str):
+    job_id = next(job_id_counter)
+    queued_job_ids.append(job_id)
+    queue_position, _ = get_job_position(job_id)
+    temp_embed = discord.Embed(
+        title="render queue",
+        description=f"maimai queue, position #{queue_position}",
+        image="https://files.catbox.moe/6o59ey.gif",
+        color=0xDA70D6,
+    )
+    await ctx.respond(embed=temp_embed)
+    original_message = await ctx.interaction.original_response()
+    future: asyncio.Future = asyncio.get_running_loop().create_future()
+    await render_queue.put(RenderJob(job_id=job_id, simai_data=simai_data, future=future))
+    try:
+        last_position = queue_position
+        last_rendering_state = False
+        while True:
+            try:
+                result = await asyncio.wait_for(asyncio.shield(future), timeout=1.5)
+                break
+            except TimeoutError:
+                position, is_rendering = get_job_position(job_id)
+                if position is None:
+                    continue
+                if position != last_position or is_rendering != last_rendering_state:
+                    if is_rendering:
+                        await original_message.edit(
+                            embed=discord.Embed(
+                                title="rendering now",
+                                description="rendering now",
+                                image="https://files.catbox.moe/6o59ey.gif",
+                                color=0xDA70D6,
+                            )
+                        )
+                    else:
+                        await original_message.edit(
+                            embed=discord.Embed(
+                                title="render queue",
+                                description=f"maimai queue, position #{position}",
+                                image="https://files.catbox.moe/6o59ey.gif",
+                                color=0xDA70D6,
+                            )
+                        )
+                    last_position = position
+                    last_rendering_state = is_rendering
+        await original_message.edit(f"```\n{simai_data[:1985]}\n```", file=discord.File(result, filename="render.mp4"), embed=None)
+    except Exception as e:
+        print(e)
+        if active_job_id != job_id:
+            try:
+                queued_job_ids.remove(job_id)
+            except ValueError:
+                pass
+        await original_message.edit("something errored", embed=None)
+    
+
+
+bot.run(os.getenv("TOKEN"))
