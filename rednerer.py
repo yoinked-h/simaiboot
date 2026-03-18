@@ -6,7 +6,7 @@ from tqdm import tqdm
 import pyglet
 from pyglet import gl
 
-pyglet.options['headless'] = True
+# pyglet.options['headless'] = True
 from slidegen import get_generator
 from simaisharpwrapper.wrapper import SimaisharpWrapper
 from simaisharpwrapper.chart import Chart
@@ -48,22 +48,39 @@ def fix(malformatted):
 
 JSONDAT = fix(malformat)
 
-#window = pyglet.window.Window(RES, RES)
+window = pyglet.window.Window(RES, RES)
 
-NOTE_SPEED = 1.5
-TOUCH_BASE_SEPARATION = 15
-TOUCH_HOLD_ARC_STEPS = 32
-SLIDE_STEP_DISTANCE = 20.0
-TIME_FROM_SPAWN_TO_RING = 1 / NOTE_SPEED # ms
-GROW_PERCENTAGE = 0.5
+# NOTE_SPEED = 1.5
+# TOUCH_BASE_SEPARATION = 15
+# TOUCH_HOLD_ARC_STEPS = 32
+# SLIDE_STEP_DISTANCE = 20.0
+# TIME_FROM_SPAWN_TO_RING = 1 / NOTE_SPEED
+# GROW_PERCENTAGE = 0.5
 PLAY_AREA_RADIUS = 150
-TOUCH_HOLD_RADIUS = 25
-CIRCLE_RADIUS = 12
-CIRCLE_THICKNESS = 3
-HOLD_LINE_WIDTH = 5
-SLIDE_ARROW_LEN = 12
-SLIDE_ARROW_THICK = 10
-TOUCHSLIDE_ANGLE_SEP = math.radians(36)
+# TOUCH_HOLD_RADIUS = 25
+# CIRCLE_RADIUS = 12
+# HOLD_LINE_WIDTH = 5
+# NOTE_LURCH = 0.2
+# SLIDE_ARROW_LEN = 12
+# SLIDE_ARROW_THICK = 10
+# TOUCHSLIDE_ANGLE_SEP = math.radians(36)
+const_settings = {
+    "note_speed": 1.5,
+    "touch_base_separation": 15,
+    "touch_hold_arc_steps": 32,
+    "slide_step_distance": 20.0,
+    # add after
+    "grow_percentage": 0.5,
+    # play area is fixed
+    "touch_hold_radius": 25,
+    "circle_radius": 12,
+    "hold_line_width": 5,
+    "note_lurch": 0.2,
+    "slide_arrow_len": 12,
+    "slide_arrow_thick": 10,
+    "touchslide_angle_sep": math.radians(36)
+}
+const_settings['time_from_spawn_to_ring'] = 1 / const_settings['note_speed']
 CENTER = (HRES, HRES)
 # CENTER = (0,0)
 # PLAY_AREA_RADIUS = 1
@@ -104,28 +121,37 @@ def draw_sensors(memory, batch):
             )
 
 
-def get_note_visual_state(time: float, hit_time: float, goal_pos: tuple[float, float], visible_until: float, keep_at_center_before_spawn: bool = False):
-    spawn_time = hit_time - TIME_FROM_SPAWN_TO_RING
+def get_note_visual_state(time: float, hit_time: float, goal_pos: tuple[float, float], visible_until: float, keep_at_center_before_spawn: bool = False,
+                          time_to_spawn=None, circle_rad=None, grow_percent=None, lurch=None):
+    if time_to_spawn is None:
+        time_to_spawn = const_settings['time_from_spawn_to_ring']
+    if circle_rad is None:
+        circle_rad = const_settings['circle_radius']
+    if grow_percent is None:
+        grow_percent = const_settings['grow_percentage']
+    if lurch is None:
+        lurch = const_settings['note_lurch']
+    spawn_time = hit_time - time_to_spawn
     if time > visible_until:
         return None
-    startloc = trig.vec_lerp(CENTER, goal_pos, 0.2)
+    startloc = trig.vec_lerp(CENTER, goal_pos, lurch)
     if time < spawn_time:
         if not keep_at_center_before_spawn:
             return None
-        return startloc, CIRCLE_RADIUS
+        return startloc, circle_rad
 
     time_to_goal = hit_time - time
-    percent = 1 - (time_to_goal / TIME_FROM_SPAWN_TO_RING)
-    if percent < GROW_PERCENTAGE:
-        radius = CIRCLE_RADIUS * (1 + ((percent - GROW_PERCENTAGE) / (1 - GROW_PERCENTAGE)))
+    percent = 1 - (time_to_goal / time_to_spawn)
+    if percent < grow_percent:
+        radius = circle_rad * (1 + ((percent - grow_percent) / (1 - grow_percent)))
         pos = startloc
     else:
-        adjusted_percent = (percent - GROW_PERCENTAGE) / (1 - GROW_PERCENTAGE)
-        radius = CIRCLE_RADIUS
+        adjusted_percent = (percent - grow_percent) / (1 - grow_percent)
+        radius = circle_rad
         pos = trig.vec_lerp(startloc, goal_pos, adjusted_percent)
 
     if time >= hit_time:
-        return goal_pos, CIRCLE_RADIUS
+        return goal_pos, circle_rad
 
     return pos, radius
 
@@ -228,16 +254,22 @@ def _sample_slide_path(segment_data, total_length: float, t: float):
     return _sample_generators(segment_data[-1][0], 1.0)
 
 
-def _get_slide_step_size(total_length: float) -> float:
+def _get_slide_step_size(total_length: float, slidestep=None) -> float:
+    if slidestep is None:
+        slidestep = const_settings['slide_step_distance']
     if total_length <= 0:
         return 1.0
-    return min(1.0, SLIDE_STEP_DISTANCE / total_length)
+    return min(1.0, slidestep / total_length)
 
 
-def _draw_slide_triangle(memory, batch, pos: tuple[float, float], rot: float, color="slide", alpha=1.0):
-    tip = trig.vec_add(pos, trig.vec_mul((math.cos(rot), math.sin(rot)), SLIDE_ARROW_LEN))
-    left = trig.vec_add(pos, trig.vec_mul((math.cos(rot + math.pi * 0.75), math.sin(rot + math.pi * 0.75)), SLIDE_ARROW_THICK))
-    right = trig.vec_add(pos, trig.vec_mul((math.cos(rot - math.pi * 0.75), math.sin(rot - math.pi * 0.75)), SLIDE_ARROW_THICK))
+def _draw_slide_triangle(memory, batch, pos: tuple[float, float], rot: float, color="slide", alpha=1.0, arrow_thickness=None, arrow_len=None):
+    if arrow_thickness is None:
+        arrow_thickness = const_settings['slide_arrow_thick']
+    if arrow_len is None:
+        arrow_len = const_settings['slide_arrow_len']
+    tip = trig.vec_add(pos, trig.vec_mul((math.cos(rot), math.sin(rot)), arrow_len))
+    left = trig.vec_add(pos, trig.vec_mul((math.cos(rot + math.pi * 0.75), math.sin(rot + math.pi * 0.75)), arrow_thickness))
+    right = trig.vec_add(pos, trig.vec_mul((math.cos(rot - math.pi * 0.75), math.sin(rot - math.pi * 0.75)), arrow_thickness))
     memory.append(
         pyglet.shapes.Triangle(
             tip[0],
@@ -250,10 +282,13 @@ def _draw_slide_triangle(memory, batch, pos: tuple[float, float], rot: float, co
             batch=batch,
         )
     )
-def render(time, chart: Chart):
-    window = pyglet.window.Window(RES, RES)
-    
-
+def render(time, chart: Chart, overrides=None):
+    # window = pyglet.window.Window(RES, RES)
+    if overrides is None:
+        overrides = {}
+    settings = const_settings.copy()
+    settings.update(overrides)
+    settings['time_from_spawn_to_ring'] = 1 / settings['note_speed']
     window.switch_to()
     window.clear()
     batch = pyglet.graphics.Batch()
@@ -264,7 +299,7 @@ def render(time, chart: Chart):
     draw_sensors(memory, batch)
     for g_pos in GOAL_POSITIONS:
         memory.append(pyglet.shapes.Circle(g_pos[0], g_pos[1], 5, color=(255, 255, 255, 255), batch=batch))
-    end_idx = bisect.bisect_right(chart_times, time + TIME_FROM_SPAWN_TO_RING)
+    end_idx = bisect.bisect_right(chart_times, time + settings['time_from_spawn_to_ring'])
     for noteset in chart_list[:end_idx]:
         for note in noteset:
             hold_end_time = noteset.time + note.length
@@ -280,7 +315,7 @@ def render(time, chart: Chart):
             if (note.type == 1 or ((note.type == 2 or note.type == 3) and note.location.group != 0)) and (time <= (noteset.time + note.length)): #touch
                 tloc = get_touch_note_loc(note)
                 time_to_goal = noteset.time - time
-                tpercent = 1-(time_to_goal / TIME_FROM_SPAWN_TO_RING)
+                tpercent = 1-(time_to_goal / settings['time_from_spawn_to_ring'])
                 percent = (max(tpercent - 0.5, 0)*2) ** 2
                 if percent > 1:
                     percent = 1
@@ -289,16 +324,16 @@ def render(time, chart: Chart):
                     hold_duration = hold_end_time - noteset.time
                     hold_progress = max(0, min(1, (time - noteset.time) / hold_duration)) if hold_duration > 0 else 0
                     
-                    circle_radius = TOUCH_HOLD_RADIUS
+                    circle_radius = settings['touch_hold_radius'] 
                     memory.append(pyglet.shapes.Circle(tloc[0], tloc[1], circle_radius, color=(255,255,255, 51), batch=batch))
                     
                     # Draw fill circle clockwise (starting from top, -90 degrees)
                     if hold_progress > 0:
                         # Create arc by drawing many small lines in a circle
-                        arc_steps = max(1, int(hold_progress * TOUCH_HOLD_ARC_STEPS))
+                        arc_steps = max(1, int(hold_progress * settings['touch_hold_arc_steps']))
                         for step in range(arc_steps):
-                            angle1 = -math.pi / 2 + (step / TOUCH_HOLD_ARC_STEPS) * 2 * math.pi
-                            angle2 = -math.pi / 2 + ((step + 1) / TOUCH_HOLD_ARC_STEPS) * 2 * math.pi
+                            angle1 = -math.pi / 2 + (step / settings['touch_hold_arc_steps']) * 2 * math.pi
+                            angle2 = -math.pi / 2 + ((step + 1) / settings['touch_hold_arc_steps']) * 2 * math.pi
                             
                             x1 = tloc[0] + circle_radius * math.cos(angle1)
                             y1 = tloc[1] + circle_radius * math.sin(angle1)
@@ -319,12 +354,12 @@ def render(time, chart: Chart):
                         if note.length > 0:
                             color = hue_rotate((255, 128, 128), edge_idx * 90) #type: ignore
                         angle = (edge_idx / 4) * math.pi * 2 # up, right, down, left
-                        offset = (math.cos(angle) * TOUCH_BASE_SEPARATION, math.sin(angle) * TOUCH_BASE_SEPARATION)
+                        offset = (math.cos(angle) * settings['touch_base_separation'], math.sin(angle) * settings['touch_base_separation'])
                         # Interpolate tip from spawn position to tloc based on percent
                         tip = trig.vec_lerp(trig.vec_add(tloc, offset), tloc, percent)
                         # Base vertices perpendicular to offset direction
                         perp_angle = angle + math.pi / 2
-                        perp_offset = (math.cos(perp_angle) * TOUCH_BASE_SEPARATION, math.sin(perp_angle) * TOUCH_BASE_SEPARATION)
+                        perp_offset = (math.cos(perp_angle) * settings['touch_base_separation'], math.sin(perp_angle) * settings['touch_base_separation'])
                         left_base = trig.vec_add(tip, trig.vec_add(offset, perp_offset))
                         right_base = trig.vec_add(tip, trig.vec_sub(offset, perp_offset))
                         if percent == 0:
@@ -369,13 +404,13 @@ def render(time, chart: Chart):
                     DO_TOUCH_SLIDE_EXCEPTION = True
                     for edge_idx in range(5): # pentagon
                         angle = (edge_idx / 5) * math.pi * 2
-                        offset = (math.cos(angle) * TOUCH_BASE_SEPARATION, math.sin(angle) * TOUCH_BASE_SEPARATION)
+                        offset = (math.cos(angle) * settings['touch_base_separation'], math.sin(angle) * settings['touch_base_separation'])
                         tip = trig.vec_lerp(trig.vec_add(tloc, offset), tloc, percent)
                         perp_angle = angle + math.pi / 2
-                        perp_offset = (math.cos(perp_angle) * TOUCH_BASE_SEPARATION, math.sin(perp_angle) * TOUCH_BASE_SEPARATION)
+                        perp_offset = (math.cos(perp_angle) * settings['touch_base_separation'], math.sin(perp_angle) * settings['touch_base_separation'])
                         # angled away by TOUCHSLIDE_ANGLE_SEP
-                        left_base = trig.vec_add(tip, trig.vec_add(trig.vec_mul(offset, math.cos(TOUCHSLIDE_ANGLE_SEP)) , trig.vec_mul(perp_offset, math.sin(TOUCHSLIDE_ANGLE_SEP))))
-                        right_base = trig.vec_add(tip, trig.vec_sub(trig.vec_mul(offset, math.cos(TOUCHSLIDE_ANGLE_SEP)) , trig.vec_mul(perp_offset, math.sin(TOUCHSLIDE_ANGLE_SEP))))
+                        left_base = trig.vec_add(tip, trig.vec_add(trig.vec_mul(offset, math.cos(settings['touchslide_angle_sep'])) , trig.vec_mul(perp_offset, math.sin(settings['touchslide_angle_sep']))))
+                        right_base = trig.vec_add(tip, trig.vec_sub(trig.vec_mul(offset, math.cos(settings['touchslide_angle_sep'])) , trig.vec_mul(perp_offset, math.sin(settings['touchslide_angle_sep']))))
                         if percent == 0:
                             color= set_alpha_color(color, tpercent*2) #type: ignore
                         memory.append(
@@ -415,8 +450,8 @@ def render(time, chart: Chart):
                     
                 
             if note.type == 2 and note.location.group == 0 and not DO_TOUCH_SLIDE_EXCEPTION: #hold
-                start_state = get_note_visual_state(time, noteset.time, g_pos, hold_end_time)
-                end_state = get_note_visual_state(time, hold_end_time, g_pos, hold_end_time, keep_at_center_before_spawn=True)
+                start_state = get_note_visual_state(time, noteset.time, g_pos, hold_end_time, time_to_spawn=settings['time_from_spawn_to_ring'], circle_rad=settings['circle_radius'], grow_percent=settings['grow_percentage'], lurch=settings['note_lurch'])
+                end_state = get_note_visual_state(time, hold_end_time, g_pos, hold_end_time, keep_at_center_before_spawn=True, time_to_spawn=settings['time_from_spawn_to_ring'], circle_rad=settings['circle_radius'], grow_percent=settings['grow_percentage'], lurch=settings['note_lurch'])
                 if start_state is None or end_state is None:
                     continue
                 start_pos, start_radius = start_state
@@ -427,18 +462,18 @@ def render(time, chart: Chart):
                         start_pos[1],
                         end_pos[0],
                         end_pos[1],
-                        thickness=HOLD_LINE_WIDTH,
+                        thickness=settings['hold_line_width'],
                         color=COLORS["holdline"],
                         batch=batch,
                     )
                 )
                 memory.append(pyglet.shapes.Circle(start_pos[0], start_pos[1], start_radius, color=color, batch=batch))
-                should_render_end_circle = hold_end_time - time < TIME_FROM_SPAWN_TO_RING
+                should_render_end_circle = hold_end_time - time < settings['time_from_spawn_to_ring']
                 if should_render_end_circle:
                     memory.append(pyglet.shapes.Circle(end_pos[0], end_pos[1], end_radius, color=color, batch=batch))
                 continue
             if note.type == 3 or len(note.slide_path) > 0: #slide
-                note_state = get_note_visual_state(time, noteset.time, g_pos, hold_end_time)
+                note_state = get_note_visual_state(time, noteset.time, g_pos, hold_end_time, time_to_spawn=settings['time_from_spawn_to_ring'], circle_rad=settings['circle_radius'], grow_percent=settings['grow_percentage'], lurch=settings['note_lurch'])
                 if note_state is not None and time < noteset.time and not DO_TOUCH_SLIDE_EXCEPTION:
                     pos, radius = note_state
                     memory.append(pyglet.shapes.Circle(pos[0], pos[1], radius, color=color, batch=batch))
@@ -457,8 +492,8 @@ def render(time, chart: Chart):
                         passed_t = 1.0
                     else:
                         passed_t = _clamp01((elapsed_since_hit - slide_path.delay) / slide_path.duration)
-                    percentage_of_way_to_ring = min(((1+ elapsed_since_hit)/2) / TIME_FROM_SPAWN_TO_RING, 1.0)
-                    step_size = _get_slide_step_size(total_length)
+                    percentage_of_way_to_ring = min(((1+ elapsed_since_hit)/2) / settings['time_from_spawn_to_ring'], 1.0)
+                    step_size = _get_slide_step_size(total_length, slidestep=settings['slide_step_distance'])
                     arrow_t = max(0.0, step_size)
                     while arrow_t <= 1.0 + 1e-6:
                         if arrow_t > passed_t + 1e-6:
@@ -471,7 +506,7 @@ def render(time, chart: Chart):
                                     cname = "each"
                                 for sample_pos, sample_rot in sample:
                                     world_pos = trig.vec_add(sample_pos, CENTER)
-                                    _draw_slide_triangle(memory, batch, world_pos, sample_rot, color=cname, alpha=percentage_of_way_to_ring)
+                                    _draw_slide_triangle(memory, batch, world_pos, sample_rot, color=cname, alpha=percentage_of_way_to_ring, arrow_thickness=settings['slide_arrow_thick'], arrow_len=settings['slide_arrow_len'])
                         arrow_t += step_size
 
                     if elapsed_since_hit >= 0:
@@ -483,14 +518,14 @@ def render(time, chart: Chart):
                                     pyglet.shapes.Circle(
                                         world_pos[0],
                                         world_pos[1],
-                                        CIRCLE_RADIUS,
+                                        settings['circle_radius'],
                                         color=COLORS["slide"],
                                         batch=batch,
                                     )
                                 )
                 continue
 
-            note_state = get_note_visual_state(time, noteset.time, g_pos, noteset.time)
+            note_state = get_note_visual_state(time, noteset.time, g_pos, noteset.time, time_to_spawn=settings['time_from_spawn_to_ring'], circle_rad=settings['circle_radius'], grow_percent=settings['grow_percentage'], lurch=settings['note_lurch'])
             if note_state is None:
                 continue
             pos, radius = note_state
@@ -506,7 +541,7 @@ def render(time, chart: Chart):
 
 FPS = 30
 
-def main(chtxt):
+def main(chtxt, overrides=None):
     data = r"&inote_6=(120){4},," + chtxt + ",(120){4},,E"
     test_chart = wrapper.deserialize(data, chart_key=6, convert_to_obj=True)
 
@@ -515,7 +550,7 @@ def main(chtxt):
     endtime = test_chart.finish_timing
     imgs = []
     for i in tqdm(range(0, int(endtime * FPS))):
-        imgs.append(render(i/FPS, test_chart))
+        imgs.append(render(i/FPS, test_chart, overrides=overrides))
     import numpy as np
     def np_ify(img):
         return np.flipud(np.frombuffer(img.get_data(), dtype=np.uint8).reshape(img.height, img.width, 4))
@@ -524,9 +559,9 @@ def main(chtxt):
     imageio.mimwrite('output.mp4', npimgs, fps=FPS) # type: ignore
     return "output.mp4"
 
-TX = "E8-E6-E7-E3-E4-E2[4:1],,,,E8-E2-E1-E5-E6-E4[4:1],,,,E6^E4[4:1]/E2/E8,E2/E8,E2/E8,E2/E8,,"
-#main(TX)
-#exit()
+TX = "1,1,1,1,2,2,2,2,,,,,3,3,3,3"
+main(TX, overrides={"note_speed": 5})
+exit()
 
 import asyncio
 import discord 
