@@ -627,7 +627,7 @@ async def on_ready():
         render_worker_task = asyncio.create_task(render_worker())
     print(f"{bot.user} ready")
 
-@bot.slash_command(name="simai_render", description="pass raw simai, e.g. `7h[4:1]/1h[4:1],5,5,5,5,` defaults to 120 bpm and 4 subdiv, use cparams for custom params")
+@bot.slash_command(name="simai_render", description="pass raw simai, e.g. `7h[4:1]/1h[4:1],5,5,5,5,` defaults to 120 bpm and 4 subdiv")
 async def simai_render(ctx: discord.ApplicationContext, simai_data: str, cparams: str = None):
     if cparams is None:
         cparams = r"{}"
