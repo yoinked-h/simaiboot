@@ -88,11 +88,12 @@ def get_angle_span(start_rotation: float, end_rotation: float, clockwise: bool, 
 class SlideGenerator:
     # edit these v
     PlayfieldRadius = 150
-    AreaARadius = PlayfieldRadius * 1
-    AreaBRadius = PlayfieldRadius * 0.533789634333
-    CenterRadius = PlayfieldRadius * 0.222222222222
-    AreaDRadius = PlayfieldRadius * 1
-    AreaERadius = PlayfieldRadius * 0.709935208311
+    SensorPRad = PlayfieldRadius * 0.8
+    AreaARadius = SensorPRad * 1
+    AreaBRadius = SensorPRad * 0.533789634333
+    CenterRadius = SensorPRad * 0.222222222222
+    AreaDRadius = SensorPRad * 1
+    AreaERadius = SensorPRad * 0.709935208311
     RingRadius = PlayfieldRadius
     CurveRadius = PlayfieldRadius * math.sin(math.radians(22.5))
     # edit these ^
