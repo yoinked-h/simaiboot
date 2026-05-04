@@ -492,7 +492,7 @@ def render(time, chart: Chart, overrides=None):
                         passed_t = 1.0
                     else:
                         passed_t = _clamp01((elapsed_since_hit - slide_path.delay) / slide_path.duration)
-                    percentage_of_way_to_ring = min(((1+ elapsed_since_hit)/2) / settings['time_from_spawn_to_ring'], 1.0)
+                    percentage_of_way_to_ring = min(((1 + elapsed_since_hit)/2) / settings['time_from_spawn_to_ring'], 1.0)
                     step_size = _get_slide_step_size(total_length, slidestep=settings['slide_step_distance'])
                     arrow_t = max(0.0, step_size)
                     while arrow_t <= 1.0 + 1e-6:
@@ -502,7 +502,7 @@ def render(time, chart: Chart, overrides=None):
                                 cname = "slide"
                                 if slide_path.type == 4:
                                     cname = "break"
-                                elif noteset.is_each:
+                                elif len(note.slide_path) >= 2:
                                     cname = "each"
                                 for sample_pos, sample_rot in sample:
                                     world_pos = trig.vec_add(sample_pos, CENTER)
@@ -523,6 +523,34 @@ def render(time, chart: Chart, overrides=None):
                                         batch=batch,
                                     )
                                 )
+                    if slide_path.segments[-1].slide_type == 11: #fan
+                        current_slide = math.ceil(passed_t * len(slide_path.segments)) - 1
+                        fanprog = _clamp01((passed_t * len(slide_path.segments)) - (len(slide_path.segments) - 1))
+                        startverts = []
+                        fanstart = GOAL_POSITIONS[slide_path.segments[-1].vertices[0].index]
+                        if current_slide < (len(slide_path.segments) - 1): # not fan
+                            startverts.append(fanstart)
+                            startverts.append(fanstart)
+                            startverts.append(fanstart)
+                        else:
+                            startverts.append(trig.vec_lerp(fanstart, GOAL_POSITIONS[slide_path.segments[-1].vertices[1].index + 1], fanprog))
+                            startverts.append(trig.vec_lerp(fanstart, GOAL_POSITIONS[slide_path.segments[-1].vertices[1].index], fanprog))
+                            startverts.append(trig.vec_lerp(fanstart, GOAL_POSITIONS[slide_path.segments[-1].vertices[1].index - 1], fanprog))
+
+                        startverts.append(GOAL_POSITIONS[slide_path.segments[-1].vertices[1].index - 1])
+                        startverts.append(GOAL_POSITIONS[slide_path.segments[-1].vertices[1].index])
+                        startverts.append(GOAL_POSITIONS[slide_path.segments[-1].vertices[1].index + 1])
+                        
+                        cname = "slide"
+                        if slide_path.type == 4:
+                            cname = "break"
+                        elif len(note.slide_path) >= 2:
+                            cname = "each"
+                        memory.append(pyglet.shapes.Polygon(
+                            *startverts,
+                            color=(*COLORS[cname],100),
+                            batch=batch
+                        ))
                 continue
 
             note_state = get_note_visual_state(time, noteset.time, g_pos, noteset.time, time_to_spawn=settings['time_from_spawn_to_ring'], circle_rad=settings['circle_radius'], grow_percent=settings['grow_percentage'], lurch=settings['note_lurch'])
@@ -542,7 +570,7 @@ def render(time, chart: Chart, overrides=None):
 FPS = 30
 
 def main(chtxt, overrides=None):
-    data = r"&inote_6=(120){4},," + chtxt + ",(120){4},,E"
+    data = r"&inote_6=(120){4}," + chtxt + ",(120){4},E"
     test_chart = wrapper.deserialize(data, chart_key=6, convert_to_obj=True)
 
     if not isinstance(test_chart, Chart):
@@ -558,9 +586,9 @@ def main(chtxt, overrides=None):
     npimgs = [np_ify(img) for img in imgs]
     imageio.mimwrite('output.mp4', npimgs, fps=FPS) # type: ignore
     return "output.mp4"
-
-TX = "1,1,1,1,2,2,2,2,,,,,3,3,3,3"
-# main(TX, overrides={"note_speed": 5})
+TX = "3-5-7w3[2:1],,,,1"
+# TX = "1p1[8:1],1p2[8:1],1p3[8:1],1p4[8:1],1p5[8:1],1p6[8:1],1p7[8:1],1p8[8:1]"
+# main(TX)
 # exit()
 
 import asyncio
