@@ -1,4 +1,5 @@
 import bisect
+import requests # type: ignore
 import json
 import math
 from pathlib import Path
@@ -284,7 +285,7 @@ def _draw_slide_triangle(memory, batch, pos: tuple[float, float], rot: float, co
     )
 def render(time, chart: Chart, overrides=None):
     window = pyglet.window.Window(RES, RES)
-    if overrides is None:
+    if overrides is None or not overrides:
         overrides = {}
     settings = const_settings.copy()
     settings.update(overrides)
@@ -718,7 +719,31 @@ async def simai_render(ctx: discord.ApplicationContext, simai_data: str, cparams
             except ValueError:
                 pass
         await original_message.edit("something errored", embed=None)
-    
 
 
+@bot.slash_command(name="set_widget_link")
+async def set_widget_link(ctx: discord.ApplicationContext):
+    await ctx.respond("h-hi there... c-could you please click o-on [this link](https://discord.com/oauth2/authorize?client_id=1483249635102298162&response_type=token&scope=openid+sdk.social_layer) please?")
+
+@bot.slash_command(name="set_widget_data")
+async def set_widget_data(ctx: discord.ApplicationContext, pc: str, rating: str, applus: str, aps:str, sssplusranks: str, uname:str):
+    dat = {
+        "data": {
+            "dynamic": [
+                {"type": 1, "name": "playcount", "value": pc},
+                {"type": 1, "name": "rating", "value": rating},
+                {"type": 1, "name": "applus", "value": applus},
+                {"type": 1, "name": "aps", "value": aps},
+                {"type": 1, "name": "sssplusranks", "value": sssplusranks},
+                {"type": 1, "name": "uname", "value": uname},
+            ]
+        }
+    }
+    auth_header = {"Authorization": f"Bot {os.getenv('TOKEN')}"}
+    url = f"https://discord.com/api/v9/applications/1483249635102298162/users/{ctx.author.id}/identities/0/profile";
+    response = requests.patch(url, headers=auth_header, json=dat)
+    if response.status_code != 200:
+        await ctx.respond("Failed to update widget data.")
+    else:
+        await ctx.respond("Widget data updated successfully.")
 bot.run(os.getenv("TOKEN"))
