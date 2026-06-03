@@ -49,7 +49,7 @@ def fix(malformatted):
 
 JSONDAT = fix(malformat)
 
-# pyglet.options['headless'] = True
+pyglet.options['headless'] = True
 window = pyglet.window.Window(RES, RES)
 
 # NOTE_SPEED = 1.5
