@@ -7,10 +7,9 @@ from tqdm import tqdm
 import pyglet
 from pyglet import gl
 
-pyglet.options['headless'] = True
 from slidegen import get_generator
 from simaisharpwrapper.wrapper import SimaisharpWrapper
-from simaisharpwrapper.chart import Chart
+from simaisharpwrapper.chart import Chart, Note_Style
 import trig
 
 
@@ -29,6 +28,7 @@ COLORS = {
     "touch": HEXTOTUPLE("5CDCF8"),
     "break": HEXTOTUPLE("E16005"),
     "holdline": HEXTOTUPLE("73FC66"),
+    "mine": HEXTOTUPLE("4140BC"),
 }
 
 wrapper = SimaisharpWrapper()
@@ -49,6 +49,7 @@ def fix(malformatted):
 
 JSONDAT = fix(malformat)
 
+# pyglet.options['headless'] = True
 window = pyglet.window.Window(RES, RES)
 
 # NOTE_SPEED = 1.5
@@ -77,6 +78,7 @@ const_settings = {
     "circle_radius": 12,
     "hold_line_width": 5,
     "note_lurch": 0.2,
+    'sensor_thickness': 1,
     "slide_arrow_len": 12,
     "slide_arrow_thick": 10,
     "touchslide_angle_sep": math.radians(36)
@@ -102,7 +104,9 @@ GOAL_POSITIONS = GOAL_POSITIONS[::-1]
 GOAL_POSITIONS = GOAL_POSITIONS[6:] + GOAL_POSITIONS[:6]
     
 
-def draw_sensors(memory, batch):
+def draw_sensors(memory, batch, thickness=1):
+    if thickness <= 0:
+        return
     for _, v in JSONDAT.items():
         verts = v['coordinates']
         for i in range(len(verts)):
@@ -115,8 +119,8 @@ def draw_sensors(memory, batch):
             memory.append(
                 pyglet.shapes.Line(
                     x1, y1, x2, y2,
-                    color=(255,255,255,75),
-                    thickness=1,
+                    color=(75,75,75,255),
+                    thickness=thickness,
                     batch=batch,
                 )
             )
@@ -172,6 +176,8 @@ def hue_rotate(color: tuple[int, int, int, int], angle: float) -> tuple[int, int
     return int(r_new), int(g_new), int(b_new), a
 
 def get_note_color(note, noteset):
+    if note.style & Note_Style.Mine:
+        return COLORS["mine"]
     if note.type == 4:
         return COLORS["break"]
     if noteset.is_each:
@@ -297,7 +303,7 @@ def render(time, chart: Chart, overrides=None):
     memory.append(pyglet.shapes.Rectangle(0, 0, RES, RES, color=(0, 0, 0, 255), batch=batch))
     chart_list = sorted(chart, key=lambda ns: ns.time)
     chart_times = [ns.time for ns in chart_list]
-    draw_sensors(memory, batch)
+    draw_sensors(memory, batch, thickness=settings['sensor_thickness'])
     for g_pos in GOAL_POSITIONS:
         memory.append(pyglet.shapes.Circle(g_pos[0], g_pos[1], 5, color=(255, 255, 255, 255), batch=batch))
     end_idx = bisect.bisect_right(chart_times, time + settings['time_from_spawn_to_ring'])
@@ -493,6 +499,8 @@ def render(time, chart: Chart, overrides=None):
                         passed_t = 1.0
                     else:
                         passed_t = _clamp01((elapsed_since_hit - slide_path.delay) / slide_path.duration)
+                    if passed_t >= 1.0:
+                        continue
                     percentage_of_way_to_ring = min(((1 + elapsed_since_hit)/2) / settings['time_from_spawn_to_ring'], 1.0)
                     step_size = _get_slide_step_size(total_length, slidestep=settings['slide_step_distance'])
                     arrow_t = max(0.0, step_size)
@@ -547,6 +555,7 @@ def render(time, chart: Chart, overrides=None):
                             cname = "break"
                         elif len(note.slide_path) >= 2:
                             cname = "each"
+                        
                         memory.append(pyglet.shapes.Polygon(
                             *startverts,
                             color=(*COLORS[cname],100),
@@ -571,6 +580,7 @@ def render(time, chart: Chart, overrides=None):
 FPS = 30
 
 def main(chtxt, overrides=None):
+    Path('.generating.lock').touch()
     data = r"&inote_6=(120){4}," + chtxt + ",(120){4},E"
     test_chart = wrapper.deserialize(data, chart_key=6, convert_to_obj=True)
 
@@ -586,8 +596,9 @@ def main(chtxt, overrides=None):
     import imageio
     npimgs = [np_ify(img) for img in imgs]
     imageio.mimwrite('output.mp4', npimgs, fps=FPS) # type: ignore
+    Path('.generating.lock').unlink()
     return "output.mp4"
-TX = "3-5-7w3[2:1],,,,1"
+TX = "1-6[4:1]*-5[2:1],,1-3[4:1],,"
 # TX = "1p1[8:1],1p2[8:1],1p3[8:1],1p4[8:1],1p5[8:1],1p6[8:1],1p7[8:1],1p8[8:1]"
 # main(TX)
 # exit()
@@ -719,7 +730,8 @@ async def simai_render(ctx: discord.ApplicationContext, simai_data: str, cparams
             except ValueError:
                 pass
         await original_message.edit("something errored", embed=None)
-
+    await asyncio.sleep(2)
+    await original_message.edit(embed=None)
 
 @bot.slash_command(name="set_widget_link")
 async def set_widget_link(ctx: discord.ApplicationContext):
@@ -740,7 +752,7 @@ async def set_widget_data(ctx: discord.ApplicationContext, pc: str, rating: str,
         }
     }
     auth_header = {"Authorization": f"Bot {os.getenv('TOKEN')}"}
-    url = f"https://discord.com/api/v9/applications/1483249635102298162/users/{ctx.author.id}/identities/0/profile";
+    url = f"https://discord.com/api/v9/applications/1483249635102298162/users/{ctx.author.id}/identities/0/profile"
     response = requests.patch(url, headers=auth_header, json=dat)
     if response.status_code != 200:
         await ctx.respond("Failed to update widget data.")

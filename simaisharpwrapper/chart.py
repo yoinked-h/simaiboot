@@ -22,6 +22,12 @@ class Note_Type(Enum):
 	Break = 4,
 	ForceInvalidate = 5
 
+class Note_Style:
+    Default = 0,
+    Ex = 1 << 0,
+    Fireworks = 1 << 1,
+    Mine = 1 << 2
+
 class Appearance(Enum):
 	Default = 0,
 	ForceNormal = 1,
@@ -173,7 +179,7 @@ def convert(data: dict) -> Chart:
                 length=note_data.get('length'),
                 slide_morph=note_data['slideMorph'],
                 slide_path=slide_paths,
-                style=note_data.get('style', 0)
+                style=note_data.get('styles', 0)
             )
             notes.append(note)
         
