@@ -745,12 +745,12 @@ async def set_widget_data(ctx: discord.ApplicationContext, pc: str, rating: str,
     dat = {
         "data": {
             "dynamic": [
-                {"type": 1, "name": "playcount", "value": pc},
-                {"type": 1, "name": "rating", "value": rating},
-                {"type": 1, "name": "applus", "value": applus},
-                {"type": 1, "name": "aps", "value": aps},
-                {"type": 1, "name": "sssplusranks", "value": sssplusranks},
-                {"type": 1, "name": "uname", "value": uname},
+                {"type": 1, "name": "playcount", "value": str(pc)},
+                {"type": 1, "name": "rating", "value": str(rating)},
+                {"type": 1, "name": "applus", "value": str(applus)},
+                {"type": 1, "name": "aps", "value": str(aps)},
+                {"type": 1, "name": "sssplusranks", "value": str(sssplusranks)},
+                {"type": 1, "name": "uname", "value": str(uname)},
             ]
         }
     }
