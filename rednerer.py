@@ -614,7 +614,7 @@ from itertools import count
 load_dotenv() # load all the variables from the env file
 bot = discord.Bot()
 
-@bot.entry_point_command(handler=discord.EntryPointHandler.app_handler, name="launch", description="Launch NotGeki")
+@bot.entry_point_command(handler=2, name="launch", description="Launch NotGeki")
 async def launch(ctx: discord.ApplicationContext):
     await ctx.response.launch_activity()
 
