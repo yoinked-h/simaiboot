@@ -760,5 +760,5 @@ async def set_widget_data(ctx: discord.ApplicationContext, pc: str, rating: str,
     if response.status_code != 200:
         await ctx.respond("Failed to update widget data.")
     else:
-        await ctx.respond("Widget data updated successfully.")
+        await ctx.respond(f"Widget data updated successfully. {response.content}")
 bot.run(os.getenv("TOKEN"))
