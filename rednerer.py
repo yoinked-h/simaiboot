@@ -474,16 +474,31 @@ def render(time, chart: Chart, overrides=None):
                         batch=batch,
                     )
                 )
-                memory.append(pyglet.shapes.Circle(start_pos[0], start_pos[1], start_radius, color=color, batch=batch))
+                if color != COLORS['mine']:
+                    memory.append(pyglet.shapes.Circle(start_pos[0], start_pos[1], start_radius, color=color, batch=batch))
+                else:
+                    memory.append(pyglet.shapes.Circle(start_pos[0], start_pos[1], start_radius, color=(0,0,0,255), batch=batch))
+                    # arc
+                    memory.append(pyglet.shapes.Arc(start_pos[0], start_pos[1], start_radius, color=color, batch=batch, thickness=settings['circle_radius']/4))
                 should_render_end_circle = hold_end_time - time < settings['time_from_spawn_to_ring']
                 if should_render_end_circle:
-                    memory.append(pyglet.shapes.Circle(end_pos[0], end_pos[1], end_radius, color=color, batch=batch))
+                    if color != COLORS['mine']:
+                        memory.append(pyglet.shapes.Circle(end_pos[0], end_pos[1], end_radius, color=color, batch=batch))
+                    else:
+                        memory.append(pyglet.shapes.Circle(end_pos[0], end_pos[1], end_radius, color=(0,0,0,255), batch=batch))
+                        # arc
+                        memory.append(pyglet.shapes.Arc(end_pos[0], end_pos[1], end_radius, color=color, batch=batch, thickness=settings['circle_radius']/4))
                 continue
             if note.type == 3 or len(note.slide_path) > 0: #slide
                 note_state = get_note_visual_state(time, noteset.time, g_pos, hold_end_time, time_to_spawn=settings['time_from_spawn_to_ring'], circle_rad=settings['circle_radius'], grow_percent=settings['grow_percentage'], lurch=settings['note_lurch'])
                 if note_state is not None and time < noteset.time and not DO_TOUCH_SLIDE_EXCEPTION:
                     pos, radius = note_state
-                    memory.append(pyglet.shapes.Circle(pos[0], pos[1], radius, color=color, batch=batch))
+                    if color != COLORS['mine']:
+                        memory.append(pyglet.shapes.Circle(pos[0], pos[1], radius, color=color, batch=batch))
+                    else:
+                        memory.append(pyglet.shapes.Circle(pos[0], pos[1], radius, color=(0,0,0,255), batch=batch))
+                        # arc
+                        memory.append(pyglet.shapes.Arc(pos[0], pos[1], radius, color=color, batch=batch, thickness=settings['circle_radius']/4))
 
                 elapsed_since_hit = time - noteset.time
                 for slide_path in note.slide_path:
