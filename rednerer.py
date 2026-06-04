@@ -567,7 +567,12 @@ def render(time, chart: Chart, overrides=None):
             if note_state is None:
                 continue
             pos, radius = note_state
-            memory.append(pyglet.shapes.Circle(pos[0], pos[1], radius, color=color, batch=batch))
+            if color != COLORS['mine']:
+                memory.append(pyglet.shapes.Circle(pos[0], pos[1], radius, color=color, batch=batch))
+            else:
+                memory.append(pyglet.shapes.Circle(pos[0], pos[1], radius, color=(0,0,0,255), batch=batch))
+                # arc
+                memory.append(pyglet.shapes.Arc(pos[0], pos[1], radius, color=color, batch=batch, thickness=settings['circle_radius']/4))
     batch.draw()
     
     window.flip()
