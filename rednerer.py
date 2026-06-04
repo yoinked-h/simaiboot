@@ -614,6 +614,9 @@ from itertools import count
 load_dotenv() # load all the variables from the env file
 bot = discord.Bot()
 
+@bot.entry_point_command(handler=discord.EntryPointHandler.app_handler, name="launch", description="Launch NotGeki")
+async def launch(ctx: ApplicationContext):
+    await ctx.response.launch_activity()
 
 @dataclass
 class RenderJob:
