@@ -482,16 +482,31 @@ def render(time, chart: Chart, overrides=None):
                         batch=batch,
                     )
                 )
-                memory.append(pyglet.shapes.Circle(start_pos[0], start_pos[1], start_radius, color=color, batch=batch))
+                if color != COLORS['mine']:
+                    memory.append(pyglet.shapes.Circle(start_pos[0], start_pos[1], start_radius, color=color, batch=batch))
+                else:
+                    memory.append(pyglet.shapes.Circle(start_pos[0], start_pos[1], start_radius, color=(0,0,0,255), batch=batch))
+                    # arc
+                    memory.append(pyglet.shapes.Arc(start_pos[0], start_pos[1], start_radius, color=color, batch=batch, thickness=settings['circle_radius']/4))
                 should_render_end_circle = hold_end_time - time < settings['time_from_spawn_to_ring']
                 if should_render_end_circle:
-                    memory.append(pyglet.shapes.Circle(end_pos[0], end_pos[1], end_radius, color=color, batch=batch))
+                    if color != COLORS['mine']:
+                        memory.append(pyglet.shapes.Circle(end_pos[0], end_pos[1], end_radius, color=color, batch=batch))
+                    else:
+                        memory.append(pyglet.shapes.Circle(end_pos[0], end_pos[1], end_radius, color=(0,0,0,255), batch=batch))
+                        # arc
+                        memory.append(pyglet.shapes.Arc(end_pos[0], end_pos[1], end_radius, color=color, batch=batch, thickness=settings['circle_radius']/4))
                 continue
             if note.type == 3 or len(note.slide_path) > 0: #slide
                 note_state = get_note_visual_state(time, noteset.time, g_pos, hold_end_time, time_to_spawn=settings['time_from_spawn_to_ring'], circle_rad=settings['circle_radius'], grow_percent=settings['grow_percentage'], lurch=settings['note_lurch'])
                 if note_state is not None and time < noteset.time and not DO_TOUCH_SLIDE_EXCEPTION:
                     pos, radius = note_state
-                    memory.append(pyglet.shapes.Circle(pos[0], pos[1], radius, color=color, batch=batch))
+                    if color != COLORS['mine']:
+                        memory.append(pyglet.shapes.Circle(pos[0], pos[1], radius, color=color, batch=batch))
+                    else:
+                        memory.append(pyglet.shapes.Circle(pos[0], pos[1], radius, color=(0,0,0,255), batch=batch))
+                        # arc
+                        memory.append(pyglet.shapes.Arc(pos[0], pos[1], radius, color=color, batch=batch, thickness=settings['circle_radius']/4))
 
                 elapsed_since_hit = time - noteset.time
                 for slide_path in note.slide_path:
@@ -575,7 +590,12 @@ def render(time, chart: Chart, overrides=None):
             if note_state is None:
                 continue
             pos, radius = note_state
-            memory.append(pyglet.shapes.Circle(pos[0], pos[1], radius, color=color, batch=batch))
+            if color != COLORS['mine']:
+                memory.append(pyglet.shapes.Circle(pos[0], pos[1], radius, color=color, batch=batch))
+            else:
+                memory.append(pyglet.shapes.Circle(pos[0], pos[1], radius, color=(0,0,0,255), batch=batch))
+                # arc
+                memory.append(pyglet.shapes.Arc(pos[0], pos[1], radius, color=color, batch=batch, thickness=settings['circle_radius']/4))
     batch.draw()
     
     window.flip()
@@ -623,6 +643,9 @@ from itertools import count
 load_dotenv() # load all the variables from the env file
 bot = discord.Bot()
 
+@bot.entry_point_command(handler=2, name="launch", description="Launch NotGeki")
+async def launch(ctx: discord.ApplicationContext):
+    await ctx.response.launch_activity()
 
 @dataclass
 class RenderJob:
@@ -751,20 +774,16 @@ async def set_widget_data(ctx: discord.ApplicationContext, pc: str, rating: str,
     dat = {
         "data": {
             "dynamic": [
-                {"type": 1, "name": "playcount", "value": pc},
-                {"type": 1, "name": "rating", "value": rating},
-                {"type": 1, "name": "applus", "value": applus},
-                {"type": 1, "name": "aps", "value": aps},
-                {"type": 1, "name": "sssplusranks", "value": sssplusranks},
-                {"type": 1, "name": "uname", "value": uname},
+                {"type": 1, "name": "playcount", "value": str(pc)},
+                {"type": 1, "name": "rating", "value": str(rating)},
+                {"type": 1, "name": "applus", "value": str(applus)},
+                {"type": 1, "name": "aps", "value": str(aps)},
+                {"type": 1, "name": "sssplusranks", "value": str(sssplusranks)},
+                {"type": 1, "name": "uname", "value": str(uname)},
             ]
         }
     }
     auth_header = {"Authorization": f"Bot {os.getenv('TOKEN')}"}
     url = f"https://discord.com/api/v9/applications/1483249635102298162/users/{ctx.author.id}/identities/0/profile"
-    response = requests.patch(url, headers=auth_header, json=dat)
-    if response.status_code != 200:
-        await ctx.respond("Failed to update widget data.")
-    else:
-        await ctx.respond("Widget data updated successfully.")
+    await ctx.respond(f"widget data updated successfully?")
 bot.run(os.getenv("TOKEN"))
