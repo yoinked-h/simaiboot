@@ -6,7 +6,10 @@ from pathlib import Path
 from tqdm import tqdm
 import pyglet
 from pyglet import gl
-
+import sys
+# if linux not testing
+TESTING = 'linux' not in sys.platform
+print(f"TESTING: {TESTING}")
 from slidegen import get_generator
 from simaisharpwrapper.wrapper import SimaisharpWrapper
 from simaisharpwrapper.chart import Chart, Note_Style
@@ -48,9 +51,11 @@ def fix(malformatted):
     return fixed
 
 JSONDAT = fix(malformat)
-
-pyglet.options['headless'] = True
-window = pyglet.window.Window(RES, RES)
+if not TESTING:
+    pyglet.options['headless'] = True
+if TESTING:
+    global window
+    window = pyglet.window.Window(RES, RES)
 
 # NOTE_SPEED = 1.5
 # TOUCH_BASE_SEPARATION = 15
@@ -290,7 +295,10 @@ def _draw_slide_triangle(memory, batch, pos: tuple[float, float], rot: float, co
         )
     )
 def render(time, chart: Chart, overrides=None):
-    window = pyglet.window.Window(RES, RES)
+    if TESTING:
+        global window
+    if not TESTING:
+        window = pyglet.window.Window(RES, RES)
     if overrides is None or not overrides:
         overrides = {}
     settings = const_settings.copy()
@@ -542,13 +550,13 @@ def render(time, chart: Chart, overrides=None):
                             startverts.append(fanstart)
                             startverts.append(fanstart)
                         else:
-                            startverts.append(trig.vec_lerp(fanstart, GOAL_POSITIONS[slide_path.segments[-1].vertices[1].index + 1], fanprog))
+                            startverts.append(trig.vec_lerp(fanstart, GOAL_POSITIONS[(slide_path.segments[-1].vertices[1].index + 1) % 8], fanprog))
                             startverts.append(trig.vec_lerp(fanstart, GOAL_POSITIONS[slide_path.segments[-1].vertices[1].index], fanprog))
                             startverts.append(trig.vec_lerp(fanstart, GOAL_POSITIONS[slide_path.segments[-1].vertices[1].index - 1], fanprog))
 
                         startverts.append(GOAL_POSITIONS[slide_path.segments[-1].vertices[1].index - 1])
                         startverts.append(GOAL_POSITIONS[slide_path.segments[-1].vertices[1].index])
-                        startverts.append(GOAL_POSITIONS[slide_path.segments[-1].vertices[1].index + 1])
+                        startverts.append(GOAL_POSITIONS[(slide_path.segments[-1].vertices[1].index + 1) % 8])
                         
                         cname = "slide"
                         if slide_path.type == 4:
@@ -598,10 +606,11 @@ def main(chtxt, overrides=None):
     imageio.mimwrite('output.mp4', npimgs, fps=FPS) # type: ignore
     Path('.generating.lock').unlink()
     return "output.mp4"
-TX = "1-6[4:1]*-5[2:1],,1-3[4:1],,"
+TX = "4w8[4:1],,"
 # TX = "1p1[8:1],1p2[8:1],1p3[8:1],1p4[8:1],1p5[8:1],1p6[8:1],1p7[8:1],1p8[8:1]"
-# main(TX)
-# exit()
+if TESTING:
+    main(TX)
+    exit()
 
 import asyncio
 import discord, json
