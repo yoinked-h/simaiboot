@@ -81,6 +81,8 @@ class Note:
         self.slide_morph = slide_morph
         self.slide_path = slide_path
         self.style = style
+    def __repr__(self):
+        return f"Note(location={self.location}, appearance={self.appearance}, type={self.type}, length={self.length}, slide_morph={self.slide_morph}, slide_path={self.slide_path}, style={self.style})"
 
 class TimingChange:
     def __init__(self, time: float, tempo: float, subdivisions: float):

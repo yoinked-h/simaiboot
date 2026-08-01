@@ -327,6 +327,8 @@ def render(time, chart: Chart, overrides=None):
             g_pos = GOAL_POSITIONS[note.location.index]
             color = get_note_color(note, noteset)
             DO_TOUCH_SLIDE_EXCEPTION = False
+            if TESTING:
+                print(note)
             if (note.type == 1 or ((note.type == 2 or note.type == 3) and note.location.group != 0)) and (time <= (noteset.time + note.length)): #touch
                 tloc = get_touch_note_loc(note)
                 time_to_goal = noteset.time - time
@@ -464,10 +466,11 @@ def render(time, chart: Chart, overrides=None):
         
                     
                 
-            if note.type == 2 and note.location.group == 0 and not DO_TOUCH_SLIDE_EXCEPTION: #hold
+            if (note.type == 2 or (note.length > 0)) and note.location.group == 0 and not DO_TOUCH_SLIDE_EXCEPTION : #hold
                 start_state = get_note_visual_state(time, noteset.time, g_pos, hold_end_time, time_to_spawn=settings['time_from_spawn_to_ring'], circle_rad=settings['circle_radius'], grow_percent=settings['grow_percentage'], lurch=settings['note_lurch'])
                 end_state = get_note_visual_state(time, hold_end_time, g_pos, hold_end_time, keep_at_center_before_spawn=True, time_to_spawn=settings['time_from_spawn_to_ring'], circle_rad=settings['circle_radius'], grow_percent=settings['grow_percentage'], lurch=settings['note_lurch'])
                 if start_state is None or end_state is None:
+                    
                     continue
                 start_pos, start_radius = start_state
                 end_pos, end_radius = end_state
@@ -496,7 +499,7 @@ def render(time, chart: Chart, overrides=None):
                         memory.append(pyglet.shapes.Circle(end_pos[0], end_pos[1], end_radius, color=(0,0,0,255), batch=batch))
                         # arc
                         memory.append(pyglet.shapes.Arc(end_pos[0], end_pos[1], end_radius, color=color, batch=batch, thickness=settings['circle_radius']/4))
-                continue
+                #continue
             if note.type == 3 or len(note.slide_path) > 0: #slide
                 note_state = get_note_visual_state(time, noteset.time, g_pos, hold_end_time, time_to_spawn=settings['time_from_spawn_to_ring'], circle_rad=settings['circle_radius'], grow_percent=settings['grow_percentage'], lurch=settings['note_lurch'])
                 if note_state is not None and time < noteset.time and not DO_TOUCH_SLIDE_EXCEPTION:
@@ -546,12 +549,15 @@ def render(time, chart: Chart, overrides=None):
                         if sample is not None:
                             for sample_pos, _ in sample:
                                 world_pos = trig.vec_add(sample_pos, CENTER)
+                                cname = "slide"
+                                if slide_path.type == 4:
+                                    cname = "break"
                                 memory.append(
                                     pyglet.shapes.Circle(
                                         world_pos[0],
                                         world_pos[1],
                                         settings['circle_radius'],
-                                        color=COLORS["slide"],
+                                        color=COLORS[cname],
                                         batch=batch,
                                     )
                                 )
@@ -626,7 +632,7 @@ def main(chtxt, overrides=None):
     imageio.mimwrite('output.mp4', npimgs, fps=FPS) # type: ignore
     Path('.generating.lock').unlink()
     return "output.mp4"
-TX = "4w8[4:1],,"
+TX = ",4h[4:1]pp5b[4:1],,"
 # TX = "1p1[8:1],1p2[8:1],1p3[8:1],1p4[8:1],1p5[8:1],1p6[8:1],1p7[8:1],1p8[8:1]"
 if TESTING:
     main(TX)
